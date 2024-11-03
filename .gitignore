@@ -1,0 +1,125 @@
+# Docker Environment
+/backups/*
+!/backups/.gitkeep
+/var/*
+!/var/.gitkeep
+/volumes/*
+!/volumes/.gitkeep
+!/volumes/*_data/.gitkeep
+/secrets/*
+!/secrets/.gitkeep
+
+# IDE & Editors
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.settings
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Magento
+/src/*
+!/src/.gitkeep
+
+# Exclude these Magento files if src is your Magento installation
+/src/.htaccess
+/src/.htaccess.sample
+/src/.php-cs-fixer.dist.php
+/src/.user.ini
+/src/auth.json
+/src/auth.json.sample
+/src/package.json.sample
+/src/grunt-config.json.sample
+/src/Gruntfile.js.sample
+/src/nginx.conf.sample
+/src/phpserver/*
+
+# Magento Generated Directories
+/src/generated/*
+/src/pub/media/*
+/src/pub/static/*
+/src/var/*
+/src/vendor/*
+
+# Magento Specific Files
+/src/CHANGELOG.md
+/src/COPYING.txt
+/src/LICENSE.txt
+/src/LICENSE_AFL.txt
+/src/SECURITY.md
+/src/composer.lock
+/src/package-lock.json
+/src/app/etc/env.php
+/src/app/etc/config.php
+/src/sitemap.xml
+/src/sitemap.xml.gz
+
+# Composer
+/composer.phar
+/auth.json
+
+# Node
+/node_modules
+/npm-debug.log
+yarn-error.log
+yarn.lock
+
+# Build Tools
+/build/
+/dist/
+/.grunt
+/.php_cs.cache
+/.php-cs-fixer.cache
+/.sass-cache
+/.bundle/
+
+# Test Coverage Reports
+/coverage/
+/report/
+.phpunit.result.cache
+
+# Log Files
+*.log
+error_log
+access_log
+
+# Cache Files
+.cache/
+/__pycache__/
+*.pyc
+
+# Environment Files
+.env
+.env.*
+!.env.example
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*~
+
+# OS Generated Files
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini
+
+# Keep These Files
+!.gitkeep
+!.gitattributes
+!.editorconfig
+!.eslintrc
+!.stylelintrc
+!README.md
+!CHANGELOG.md
+!LICENSE
+
+# AI Digest Files
+.aidigestignore
+codebase.md

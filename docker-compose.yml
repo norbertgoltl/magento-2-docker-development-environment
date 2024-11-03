@@ -1,0 +1,259 @@
+name: magento-local
+
+services:
+  nginx:
+    build:
+      context: ./.docker/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - type: bind
+        source: ./src
+        target: /var/www/html
+        read_only: true
+      - type: bind
+        source: ./var/log/nginx
+        target: /var/log/nginx
+    depends_on:
+      php:
+        condition: service_healthy
+        required: true
+    networks:
+      - magento
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    develop:
+      watch:
+        - path: ./.docker/nginx/conf.d/
+          action: sync
+          target: /etc/nginx/conf.d/
+    profiles: ["web", "full"]
+
+  php:
+    build:
+      context: ./.docker/php
+      dockerfile: Dockerfile
+    volumes:
+      - type: bind
+        source: ./src
+        target: /var/www/html
+      - type: bind
+        source: ./var/log/php
+        target: /var/log/php
+      - type: bind
+        source: ./var/composer
+        target: /var/www/.composer
+    environment:
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-4G}
+      PHP_OPCACHE_ENABLE: ${PHP_OPCACHE_ENABLE:-1}
+      PHP_OPCACHE_REVALIDATE_FREQ: ${PHP_OPCACHE_REVALIDATE_FREQ:-0}
+      PHP_MAX_EXECUTION_TIME: ${PHP_MAX_EXECUTION_TIME:-1800}
+      COMPOSER_HOME: /var/www/.composer
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - magento
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    develop:
+      watch:
+        - path: ./src
+          action: sync
+          target: /var/www/html
+          ignore:
+            - var/
+            - generated/
+            - pub/static/
+            - pub/media/
+    profiles: ["web", "full"]
+
+  mysql:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-magento}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-magento}
+      MYSQL_USER: ${MYSQL_USER:-magento}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-magento}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - type: bind
+        source: ./var/log/mysql
+        target: /var/log/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - magento
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-p${MYSQL_ROOT_PASSWORD:-magento}",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles: ["db", "full"]
+
+  redis:
+    image: redis:7.2-alpine
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD:-magento}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - magento
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    profiles: ["cache", "full"]
+
+  opensearch:
+    image: opensearchproject/opensearch:2.12.0
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=${OPENSEARCH_DISABLE_SECURITY:-true}
+      - DISABLE_INSTALL_DEMO_CONFIG=${OPENSEARCH_DISABLE_DEMO:-true}
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - magento
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles: ["search", "full"]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-magento}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-magento}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - magento
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles: ["queue", "full"]
+
+networks:
+  magento:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME:-magento}_network
+
+volumes:
+  mysql_data:
+    name: ${COMPOSE_PROJECT_NAME:-magento}_mysql_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/volumes/mysql_data
+  redis_data:
+    name: ${COMPOSE_PROJECT_NAME:-magento}_redis_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/volumes/redis_data
+  opensearch_data:
+    name: ${COMPOSE_PROJECT_NAME:-magento}_opensearch_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/volumes/opensearch_data
+  rabbitmq_data:
+    name: ${COMPOSE_PROJECT_NAME:-magento}_rabbitmq_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/volumes/rabbitmq_data
